@@ -19,37 +19,190 @@ package org.apache.spark.graphx
 
 import org.apache.spark.SparkFunSuite
 
+import scala.reflect.ClassTag
+
 class PregelSuite extends SparkFunSuite with LocalSparkContext {
 
-  test("1 iteration") {
+//  test("pregel iteration") {
+//    withSpark { sc =>
+//      val startTime = System.currentTimeMillis
+//      val workGraph = GraphLoader.edgeListFile(sc, "Facebook_genGragh_18.txt", false, 2)
+//
+//      println("  It took %d ms loadGraph".format(System.currentTimeMillis - startTime))
+//      def sendMessage(edge: EdgeTriplet[Long, Int]): Iterator[(VertexId, Long)] = {
+//        if (edge.srcAttr < Long.MaxValue && edge.srcAttr + 1 < edge.dstAttr) {
+//          Iterator((edge.dstId, edge.srcAttr + 1))
+//        } else {
+//          Iterator.empty
+//        }
+//      }
+//
+//
+//      val iniGraph = workGraph.mapVertices({ case (vid, attr) =>
+//        if (vid == 1) {
+//          0L
+//        }
+//        else {
+//          Long.MaxValue
+//        }
+//      }).cache()
+//
+//
+//
+//      val resultGraph = Pregel(iniGraph, Long.MaxValue)(
+//
+//        vprog = (id, attr, msg) => math.min(attr, msg),
+//        sendMsg = sendMessage,
+//        mergeMsg = (a, b) => math.min(a, b)
+//      )
+//
+//
+//
+//            println("pregel")
+////            for (i <- resultGraph.vertices) {
+////              println(i._1, i._2)
+////            }
+////    }
+//
+//
+////  }
+////
+//  test("MyPregel iteration") {
+//    withSpark { sc =>
+//      val myStartTime = System.currentTimeMillis
+//      val workGraph1 = MyGraphLoader.edgeListFile(sc, "Facebook_genGragh_18.txt", false, 2)
+//      println("  It took %d ms loadGraph".format(System.currentTimeMillis - myStartTime))
+//
+//      def mySendMessage(edge: MyEdgeTriplet[Long, Int]): Iterator[(VertexId, Long)] = {
+//        if (edge.srcAttr < Long.MaxValue) {
+//          Iterator((edge.dstId, edge.srcAttr + 1))
+//        } else {
+//          Iterator.empty
+//        }
+//      }
+//
+//
+//      val iniGraph1 = workGraph1.mapVertices({ case (vid, attr) =>
+//        if (vid == 1) {
+//          0L
+//        }
+//        else {
+//          Long.MaxValue
+//        }
+//      }).cache()
+//
+//
+//
+//      val resultGraph1 = MyPregel(iniGraph1, Long.MaxValue,30)(
+//
+//        vprog = (id, attr, msg) => math.min(attr, msg),
+//        sendMsg = mySendMessage,
+//        mergeMsg = (a, b) => math.min(a, b)
+//      )
+//
+//      println("My pregel")
+//
+//
+//
+//
+//
+////      for (i <- resultGraph.vertices) {
+////        println(i._1, i._2)
+////      }
+//    }
+//  }
+
+//
+//
+  test("mypregel iteration") {
     withSpark { sc =>
-      val n = 5
-      val starEdges = (1 to n).map(x => (0: VertexId, x: VertexId))
-      val star = Graph.fromEdgeTuples(sc.parallelize(starEdges, 3), "v").cache()
-      val result = Pregel(star, 0)(
-        (vid, attr, msg) => attr,
-        et => Iterator.empty,
-        (a: Int, b: Int) => throw new Exception("mergeMsg run unexpectedly"))
-      assert(result.vertices.collect.toSet === star.vertices.collect.toSet)
+      val myStartTime = System.currentTimeMillis
+      val workGraph1 = MyGraphLoader.edgeListFile(sc, "Facebook_genGragh_10.txt", false, 16)
+      println("  It took %d ms loadGraph".format(System.currentTimeMillis - myStartTime))
+      val iniGraph = workGraph1.mapVertices { case (vid, _) => vid }
+
+      def sendMessage(e: MyEdgeTriplet[VertexId, Int]): Iterator[(VertexId, Map[VertexId, VertexId])] = {
+
+        Iterator((e.dstId, Map(e.srcAttr -> 1L)))
+      }
+      //合并，计算vertexId相同的邻居结点中有哪些社区id，每个id出现了几次，得到一个(vertexId,(communityId -> num)）的集合
+      def mergeMessage(count1: Map[VertexId, Long], count2: Map[VertexId, Long])
+      : Map[VertexId, Long] = {
+        (count1.keySet ++ count2.keySet).map { i =>
+          val count1Val = count1.getOrElse(i, 0L)
+          val count2Val = count2.getOrElse(i, 0L)
+          i -> (count1Val + count2Val)
+        }.toMap
+      }
+
+      def vertexProgram(vid: VertexId, attr: Long, message: Map[VertexId, Long]): VertexId = {
+        if (message.isEmpty) attr else message.maxBy(_._2)._1
+      }
+      val initialMessage = Map[VertexId, Long]()
+
+
+      MyPregel(iniGraph, initialMessage, maxIterations = 30)(
+        vprog = vertexProgram,
+        sendMsg = sendMessage,
+        mergeMsg = mergeMessage)
+
+
+
+//
+//
+
+      println("My pregel " + (System.currentTimeMillis - myStartTime))
+
+
     }
   }
 
-  test("chain propagation") {
+
+  test("pregel iteration") {
     withSpark { sc =>
-      val n = 5
-      val chain = Graph.fromEdgeTuples(
-        sc.parallelize((1 until n).map(x => (x: VertexId, x + 1: VertexId)), 3),
-        0).cache()
-      assert(chain.vertices.collect.toSet === (1 to n).map(x => (x: VertexId, 0)).toSet)
-      val chainWithSeed = chain.mapVertices { (vid, attr) => if (vid == 1) 1 else 0 }.cache()
-      assert(chainWithSeed.vertices.collect.toSet ===
-        Set((1: VertexId, 1)) ++ (2 to n).map(x => (x: VertexId, 0)).toSet)
-      val result = Pregel(chainWithSeed, 0)(
-        (vid, attr, msg) => math.max(msg, attr),
-        et => if (et.dstAttr != et.srcAttr) Iterator((et.dstId, et.srcAttr)) else Iterator.empty,
-        (a: Int, b: Int) => math.max(a, b))
-      assert(result.vertices.collect.toSet ===
-        chain.vertices.mapValues { (vid, attr) => attr + 1 }.collect.toSet)
+      val myStartTime = System.currentTimeMillis
+      val workGraph1 = GraphLoader.edgeListFile(sc, "Facebook_genGragh_10.txt", false, 16)
+      println("  It took %d ms loadGraph".format(System.currentTimeMillis - myStartTime))
+      val iniGraph = workGraph1.mapVertices { case (vid, _) => vid }
+
+      def sendMessage(e: EdgeTriplet[VertexId, Int]): Iterator[(VertexId, Map[VertexId, VertexId])] = {
+
+        Iterator((e.dstId, Map(e.srcAttr -> 1L)))
+      }
+      //合并，计算vertexId相同的邻居结点中有哪些社区id，每个id出现了几次，得到一个(vertexId,(communityId -> num)）的集合
+      def mergeMessage(count1: Map[VertexId, Long], count2: Map[VertexId, Long])
+      : Map[VertexId, Long] = {
+        (count1.keySet ++ count2.keySet).map { i =>
+          val count1Val = count1.getOrElse(i, 0L)
+          val count2Val = count2.getOrElse(i, 0L)
+          i -> (count1Val + count2Val)
+        }.toMap
+      }
+
+      def vertexProgram(vid: VertexId, attr: Long, message: Map[VertexId, Long]): VertexId = {
+        if (message.isEmpty) attr else message.maxBy(_._2)._1
+      }
+      val initialMessage = Map[VertexId, Long]()
+
+
+      Pregel(iniGraph, initialMessage, maxIterations = 30)(
+        vprog = vertexProgram,
+        sendMsg = sendMessage,
+        mergeMsg = mergeMessage)
+
+
+
+      //
+      //
+
+      println(" pregel " + (System.currentTimeMillis - myStartTime))
+
+
     }
   }
-}
+
+  }
+//
+//
+//
+//

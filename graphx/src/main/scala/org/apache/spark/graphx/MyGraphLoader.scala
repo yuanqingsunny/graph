@@ -1,8 +1,70 @@
 package org.apache.spark.graphx
 
+import org.apache.spark.{HashPartitioner, SparkContext}
+import org.apache.spark.internal.Logging
+import org.apache.spark.storage.StorageLevel
+
 /**
  * Created by sunny on 4/25/16.
  */
-class MyGraphLoader {
+object MyGraphLoader  extends Logging{
+  def edgeListFile(
+                    sc: SparkContext,
+                    path: String,
+                    canonicalOrientation: Boolean = false,
+                    numVertexPartitions: Int = -1,
+                    edgeStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY,
+                    vertexStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY)
+  : MyGraph[Int, Int] =
+  {
+    val startTime = System.currentTimeMillis
 
+    // Parse the edge data table directly into edge partitions
+    val lines =
+      if (numVertexPartitions > 0) {
+        sc.textFile(path, numVertexPartitions).coalesce(numVertexPartitions)
+      } else {
+        sc.textFile(path)
+      }
+
+
+    val mid_data = lines.map(line => {
+      val parts = line.split("\\s+")
+      (parts(0).toLong, parts(1).toLong)
+    })++ lines.map(line => {
+      val parts = line.split("\\s+")
+      (parts(0).toLong,-1l)
+    })++ lines.map(line => {
+      val parts = line.split("\\s+")
+      (parts(1).toLong,-1l)
+    })
+
+
+    val links = mid_data.distinct().groupByKey()
+
+//    val vertices = mid_data.flatMap(p => List(p._1, p._2)).distinct().map(v => (v,-1l)).groupByKey()
+
+
+    println("It took %d ms to group".format(System.currentTimeMillis - startTime))
+    //添加出度为0的节点的邻接表项 如：(4,()) (5,())...
+
+//    val nodes = scala.collection.mutable.Set.empty ++ links.keys.collect()
+
+
+//    val newNodes = vertices.distinct.subtract(links.keys).collect()
+
+
+    println("It took %d ms to link".format(System.currentTimeMillis - startTime))
+
+
+//    sc.parallelize(for (i <- vertices.collect()) yield (i, List.empty))
+    val linkList = links .partitionBy(new HashPartitioner(numVertexPartitions))
+
+
+
+    println("It took %d ms to partitioner".format(System.currentTimeMillis - startTime))
+
+    MyGraphImpl.fromEdgeList(linkList, defaultVertexAttr = 1, edgeStorageLevel = edgeStorageLevel,
+      vertexStorageLevel = vertexStorageLevel)
+  } // end of edgeListFile
 }

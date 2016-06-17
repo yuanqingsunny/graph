@@ -130,6 +130,7 @@ object Pregel extends Logging {
     var prevG: Graph[VD, ED] = null
     var i = 0
     while (activeMessages > 0 && i < maxIterations) {
+      val startTime = System.currentTimeMillis
       // Receive the messages and update the vertices.
       prevG = g
       g = g.joinVertices(messages)(vprog).cache()
@@ -144,7 +145,7 @@ object Pregel extends Logging {
       // (depended on by the vertices of g) and the vertices of prevG (depended on by oldMessages
       // and the vertices of g).
       activeMessages = messages.count()
-
+      logInfo("DEBUG INFO")
       logInfo("Pregel finished iteration " + i)
 
       // Unpersist the RDDs hidden by newly-materialized RDDs
@@ -153,8 +154,10 @@ object Pregel extends Logging {
       prevG.edges.unpersist(blocking = false)
       // count the iteration
       i += 1
+      println("iteration  " +i +"  It took %d ms send message".format(System.currentTimeMillis - startTime))
     }
     messages.unpersist(blocking = false)
+
     g
   } // end of apply
 

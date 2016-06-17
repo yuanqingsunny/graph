@@ -9,6 +9,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 object BreadFirstSearch {
 
   def main(args: Array[String]) {
+    val startTime = System.currentTimeMillis()
     val conf = new SparkConf().setAppName("BreadFirstSearch")
     val spark = new SparkContext(conf)
     val workGraph = MyGraphLoader.edgeListFile(spark, args(0), false, 2)
@@ -39,7 +40,7 @@ object BreadFirstSearch {
       vprog = (id, attr, msg) => math.min(attr, msg),
       sendMsg = sendMessage,
       mergeMsg = (a, b) => math.min(a, b)
-    ).vertices.saveAsTextFile(args(1))
+    ).vertices.saveAsTextFile(args(1)+ "//bfs_result"+ startTime)
     spark.stop()
   }
 }

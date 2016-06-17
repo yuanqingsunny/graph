@@ -17,8 +17,10 @@
 
 package org.apache.spark.graphx.impl
 
+import scala.collection.immutable.HashSet
 import scala.reflect.{classTag, ClassTag}
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.HashPartitioner
 import org.apache.spark.graphx._
 import org.apache.spark.graphx.util.BytecodeUtils
@@ -35,7 +37,7 @@ import org.apache.spark.storage.StorageLevel
 class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     @transient val vertices: VertexRDD[VD],
     @transient val replicatedVertexView: ReplicatedVertexView[VD, ED])
-  extends Graph[VD, ED] with Serializable {
+  extends Graph[VD, ED] with Serializable with Logging {
 
   /** Default constructor is provided to support serialization */
   protected def this() = this(null, null)
@@ -190,7 +192,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
       mergeMsg: (A, A) => A,
       tripletFields: TripletFields,
       activeSetOpt: Option[(VertexRDD[_], EdgeDirection)]): VertexRDD[A] = {
-
+    val startTime = System.currentTimeMillis
     vertices.cache()
     // For each vertex, replicate its attribute only to partitions where it is
     // in the relevant position in an edge.
@@ -202,7 +204,6 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
         replicatedVertexView
     }
     val activeDirectionOpt = activeSetOpt.map(_._2)
-
     // Map and combine.
     val preAgg = view.edges.partitionsRDD.mapPartitions(_.flatMap {
       case (pid, edgePartition) =>
@@ -240,7 +241,16 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     }).setName("GraphImpl.aggregateMessages - preAgg")
 
     // do the final reduction reusing the index map
-    vertices.aggregateUsingIndex(preAgg, mergeMsg)
+
+//        val preNum =preAgg.count()
+//
+//        println("Number   "+ preNum +"  It took %d ms count preAgg".format(System.currentTimeMillis - startTime))
+//        logInfo("impl DEBUG INFO ")
+//        val mid = System.currentTimeMillis
+    val r = vertices.aggregateUsingIndex(preAgg, mergeMsg)
+//        val rNum = r.count()
+//        println("Number   "+ rNum + "  It took %d ms count aggregate".format(System.currentTimeMillis - mid))
+    r
   }
 
   override def outerJoinVertices[U: ClassTag, VD2: ClassTag]

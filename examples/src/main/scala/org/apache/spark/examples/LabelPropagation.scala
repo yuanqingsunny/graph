@@ -6,7 +6,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 /**
  * Created by sunny on 5/26/16.
  */
-class LabelPropagation {
+object LabelPropagation {
 
 
   def main(args: Array[String]) {
