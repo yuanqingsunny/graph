@@ -22,20 +22,7 @@ class MyShippableVertexPartition[VD](    val index: GraphXPrimitiveKeyOpenHashMa
 
   def iterator: Iterator[(VertexId, VD)] =
     mask.iterator.map(ind => (local2global(ind), values(ind)))
-
-
-
-  def withIndex(index: GraphXPrimitiveKeyOpenHashMap[VertexId, Int]): MyShippableVertexPartition[VD] = {
-    new MyShippableVertexPartition(index,local2global, this.values, this.mask)
-  }
-
-  def withValues[VD2: ClassTag](values: Array[VD2]): MyShippableVertexPartition[VD2] = {
-    new MyShippableVertexPartition(this.index,local2global,  values, this.mask)
-  }
-
-  def withMask(mask: BitSet): MyShippableVertexPartition[VD] = {
-    new MyShippableVertexPartition(this.index, local2global, this.values, mask)
-  }
+//
 
   def aggregateUsingIndex[VD2: ClassTag](
                                           iter: Iterator[Product2[VertexId, VD2]],
@@ -56,7 +43,7 @@ class MyShippableVertexPartition[VD](    val index: GraphXPrimitiveKeyOpenHashMa
 //        println("debug")
       }
     }
-    this.withValues(newValues).withMask(newMask)
+    new MyShippableVertexPartition(index, local2global, newValues, newMask)
   }
 
 

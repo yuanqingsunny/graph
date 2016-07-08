@@ -10,25 +10,25 @@ import scala.reflect.ClassTag
  * Created by sunny on 4/26/16.
  */
 class MyVertexRDDImpl[ VD: ClassTag,ED: ClassTag] private[graphx]
-(@transient val  partitionsRDD: RDD[(PartitionID, MyVertexPartition[VD,ED])],
+(@transient val  partitionsRDD: RDD[MyVertexPartition[VD,ED]],
   val targetStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY)
 
   extends MyVertexRDD[VD,ED](partitionsRDD.context, List(new OneToOneDependency(partitionsRDD))) {
 
   override def aggregateUsingIndex[VD2: ClassTag](
                                                    messages: RDD[(VertexId, VD2)], reduceFunc: (VD2, VD2) => VD2): MyVertexMessage[VD2] = {
-    val shuffled = messages.partitionBy(new HashPartitioner(partitionsRDD.partitions.length)).cache() //60ms
+    val shuffled = messages.partitionBy(new HashPartitioner(partitionsRDD.getNumPartitions)) //60ms  remove cache()
     val parts = partitionsRDD.zipPartitions(shuffled, true) { (thisIter, msgIter) =>
-      thisIter.flatMap((pid) =>Iterable((pid._1,pid._2.aggregateUsingIndex(msgIter, reduceFunc))))
+      thisIter.map(_.aggregateUsingIndex(msgIter, reduceFunc))
     }.cache()//add cache make it fast  important!!
     this.withPartitionsRDD[VD2](parts)
   }
 
   override  def withPartitionsRDD[VD2: ClassTag](
-                                                  partitionsRDD: RDD[(PartitionID, MyVertexPartition[VD2,ED])]): MyVertexRDD[VD2,ED] = {
+                                                  partitionsRDD: RDD[MyVertexPartition[VD2,ED]]): MyVertexRDD[VD2,ED] = {
     new MyVertexRDDImpl(partitionsRDD, this.targetStorageLevel)
   }
-  override def withPartitionsRDD[VD2: ClassTag](partitionsRDD: RDD[(PartitionID,MyShippableVertexPartition[VD2])]): MyVertexMessage[VD2] = {
+  override def withPartitionsRDD[VD2: ClassTag](partitionsRDD: RDD[MyShippableVertexPartition[VD2]]): MyVertexMessage[VD2] = {
     new MyVertexMessageImpl(partitionsRDD, this.targetStorageLevel)
   }
 
@@ -53,29 +53,29 @@ class MyVertexRDDImpl[ VD: ClassTag,ED: ClassTag] private[graphx]
         this.withPartitionsRDD(
           partitionsRDD.zipPartitions(
             other.partitionBy(this.partitioner.get), preservesPartitioning = true) {
-            (partIter, msgs) => partIter.flatMap(v => Iterator((v._1,v._2.leftJoin(msgs)(f))))
+            (partIter, msgs) => partIter.flatMap(v => Iterator(v.leftJoin(msgs)(f)))
           }
         )
     }
   }
   override def foreachEdge(f :(VertexId,ED) => Unit): Unit ={
     partitionsRDD.foreach(v =>{
-      v._2.foreachEdgePartition(f)
+      v.foreachEdgePartition(f)
     })
   }
   def mapEdgePartitions[ VD2: ClassTag,ED2: ClassTag](
-                                                       f: (PartitionID, MyVertexPartition[VD,ED]) => MyVertexPartition[VD2,ED2]): MyVertexRDDImpl[VD2,ED2] = {
+                                                       f: (MyVertexPartition[VD,ED]) => MyVertexPartition[VD2,ED2]): MyVertexRDDImpl[VD2,ED2] = {
     this.withPartitionsRDD[VD2,ED2](partitionsRDD.mapPartitions({ iter =>
       if (iter.hasNext) {
-        val (pid, ep) = iter.next()
-        Iterator(Tuple2(pid, f(pid, ep)))
+        val  ep = iter.next()
+        Iterator(f( ep))
       } else {
         Iterator.empty
       }
     }, preservesPartitioning = true))
   }
   private[graphx] def withPartitionsRDD[ VD2: ClassTag,ED2: ClassTag](
-                                                                       partitionsRDD: RDD[(PartitionID, MyVertexPartition[VD2,ED2])]): MyVertexRDDImpl[VD2,ED2] = {
+                                                                       partitionsRDD: RDD[MyVertexPartition[VD2,ED2]]): MyVertexRDDImpl[VD2,ED2] = {
     new MyVertexRDDImpl(partitionsRDD, this.targetStorageLevel)
   }
   override def leftZipJoin[VD2: ClassTag, VD3: ClassTag]
@@ -85,7 +85,7 @@ class MyVertexRDDImpl[ VD: ClassTag,ED: ClassTag] private[graphx]
     ) { (thisIter, otherIter) =>
       val thisPart = thisIter.next()
       val otherPart = otherIter.next()
-      Iterator((thisPart._1,thisPart._2.leftJoin(otherPart._2)(f)))
+      Iterator(thisPart.leftJoin(otherPart)(f))
     }
     this.withPartitionsRDD(newPartitionsRDD)
   }
@@ -93,7 +93,7 @@ class MyVertexRDDImpl[ VD: ClassTag,ED: ClassTag] private[graphx]
   override def mapVertexPartitions[VD2: ClassTag](
                                                  f: (VertexId, VD) => VD2)
   : MyVertexRDD[VD2,ED] = {
-    val newPartitionsRDD = partitionsRDD.mapPartitions(_.flatMap( v => Iterator((v._1,v._2.map(f)))), preservesPartitioning = true)
+    val newPartitionsRDD = partitionsRDD.mapPartitions(_.flatMap( v => Iterator(v.map(f))), preservesPartitioning = true)
     this.withPartitionsRDD(newPartitionsRDD)
   }
 

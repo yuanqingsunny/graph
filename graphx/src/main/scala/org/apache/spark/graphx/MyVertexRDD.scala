@@ -16,14 +16,14 @@ abstract class MyVertexRDD[VD, ED](
 
 
 
-  private[graphx] def partitionsRDD: RDD[(PartitionID, MyVertexPartition[VD, ED])]
+  private[graphx] def partitionsRDD: RDD[MyVertexPartition[VD, ED]]
 
   override protected def getPartitions: Array[Partition] = partitionsRDD.partitions
 
   override def compute(part: Partition, context: TaskContext): Iterator[(VertexId, VD)] = {
-    val p = firstParent[(PartitionID, MyVertexPartition[VD, _])].iterator(part, context)
+    val p = firstParent[ MyVertexPartition[VD, _]].iterator(part, context)
     if (p.hasNext) {
-      p.next()._2.iterator.map(_.copy())
+      p.next().iterator.map(_.copy())
     } else {
       Iterator.empty
     }
@@ -33,13 +33,10 @@ abstract class MyVertexRDD[VD, ED](
       case Some(p) => vertices
       case None => vertices.partitionBy(new HashPartitioner(vertices.partitions.length))
     }
-//    val vertexPartitions = vPartitioned.mapPartitions(
-//      iter => Iterator(new MyShippableVertexPartition(iter)),
-//      preservesPartitioning = true)
-//    new MyVertexRDDImpl(vertexPartitions)
+
   }
   def mapEdgePartitions[ VD2: ClassTag,ED2: ClassTag](
-                                                       f: (PartitionID, MyVertexPartition[VD,ED]) => MyVertexPartition[VD2,ED2]): MyVertexRDDImpl[VD2,ED2]
+                                                       f: ( MyVertexPartition[VD,ED]) => MyVertexPartition[VD2,ED2]): MyVertexRDDImpl[VD2,ED2]
   def leftJoin[VD2: ClassTag, VD3: ClassTag]
   (other: RDD[(VertexId, VD2)])
   (f: (VertexId, VD, Option[VD2]) => VD3)
@@ -57,8 +54,8 @@ abstract class MyVertexRDD[VD, ED](
   : MyVertexRDD[VD2,ED]
 
 
-  def withPartitionsRDD[VD2: ClassTag](partitionsRDD: RDD[(PartitionID, MyVertexPartition[VD2,ED])]): MyVertexRDD[VD2,ED]
-  def withPartitionsRDD[VD2: ClassTag](partitionsRDD: RDD[(PartitionID,MyShippableVertexPartition[VD2])]): MyVertexMessage[VD2]
+  def withPartitionsRDD[VD2: ClassTag](partitionsRDD: RDD[MyVertexPartition[VD2,ED]]): MyVertexRDD[VD2,ED]
+  def withPartitionsRDD[VD2: ClassTag](partitionsRDD: RDD[MyShippableVertexPartition[VD2]]): MyVertexMessage[VD2]
   def aggregateUsingIndex[VD2: ClassTag](
                                           messages: RDD[(VertexId, VD2)], reduceFunc: (VD2, VD2) => VD2): MyVertexMessage[VD2]
 
@@ -90,13 +87,12 @@ object MyVertexRDD {
 //      v._2.foreach(a =>print(a +" "))
 //      println()
 //    })
-    val vertexPartitions = edges.mapPartitionsWithIndex((pid,list) =>{
+    val vertexPartitions = edges.mapPartitions(list =>{
       val builder = new MyVertexPartitionBuilder[VD]()
-      println("pid: "+ pid)
       list.foreach(iter =>{
           builder.add(iter)}
         )
-    Iterator((pid,builder.toVertexPartition))
+    Iterator(builder.toVertexPartition)
     }).cache()
 
 

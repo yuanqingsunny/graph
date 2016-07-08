@@ -243,9 +243,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     // do the final reduction reusing the index map
 
 //        val preNum =preAgg.count()
-//
 //        println("Number   "+ preNum +"  It took %d ms count preAgg".format(System.currentTimeMillis - startTime))
-//        logInfo("impl DEBUG INFO ")
 //        val mid = System.currentTimeMillis
     val r = vertices.aggregateUsingIndex(preAgg, mergeMsg)
 //        val rNum = r.count()

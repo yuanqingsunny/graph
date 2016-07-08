@@ -13,7 +13,7 @@ import scala.reflect.ClassTag
 class MyGraphImpl[VD: ClassTag, ED: ClassTag] protected
 (
   @transient val vertices: MyVertexRDD[VD,ED])
-//  @transient val myEdgeRDDImpl: MyEdgeRDDImpl[ED])
+
   extends MyGraph[VD, ED] with Serializable with Logging {
 
 
@@ -21,23 +21,21 @@ class MyGraphImpl[VD: ClassTag, ED: ClassTag] protected
 
   override def cache(): MyGraph[VD, ED] = {
     vertices.cache()
-//    myEdgeRDDImpl.cache()
+
     this
   }
 
 
-  //override def mapEdges[ED2: ClassManifest](map: (PartitionID, Iterator[Edge[ED]]) => Iterator[ED2]): Graph[VD, ED2] = ???
+
 
 
   override def persist(newLevel: StorageLevel): MyGraph[VD, ED] = {
     vertices.persist(newLevel)
-//    myEdgeRDDImpl.persist(newLevel)
     this
   }
 
   override def unpersist(blocking: Boolean = true): MyGraph[VD, ED] = {
     vertices.unpersist(blocking)
-//    myEdgeRDDImpl.unpersist(blocking)
     this
   }
 
@@ -65,7 +63,7 @@ class MyGraphImpl[VD: ClassTag, ED: ClassTag] protected
                                              map:  MyEdgeTriplet[VD, ED] => ED2,
                                              tripletFields: TripletFields): MyGraph[VD, ED2]= {
 
-    val newVertices = vertices.mapEdgePartitions { (pid, part) =>
+    val newVertices = vertices.mapEdgePartitions { (part) =>
       part.mapTriplets(map)
     }.cache()
     new MyGraphImpl(newVertices)
@@ -149,8 +147,8 @@ class MyGraphImpl[VD: ClassTag, ED: ClassTag] protected
     // Map and combine.
 
 
-    val preAgg = vertices.partitionsRDD.mapPartitions(_.flatMap {
-      case (pid, vertexPartition) =>
+    val preAgg = vertices.partitionsRDD.mapPartitions(_.flatMap(
+      vertexPartition =>
 
         activeDirectionOpt match {
           case Some(EdgeDirection.Both) =>
@@ -164,19 +162,17 @@ class MyGraphImpl[VD: ClassTag, ED: ClassTag] protected
           case _ => // None
             vertexPartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields, EdgeActiveness.Neither)
         }
+    )
+    ).setName("GraphImpl.aggregateMessages - preAgg")
 
-    }).setName("GraphImpl.aggregateMessages - preAgg")
 
 //    val preNum =preAgg.count()
-//
 //    println("Number   "+ preNum +"  It took %d ms count preAgg".format(System.currentTimeMillis - startTime))
-//    logInfo("impl DEBUG INFO ")
 //    val mid = System.currentTimeMillis
-     val r = vertices.aggregateUsingIndex(preAgg, mergeMsg)
+    val r = vertices.aggregateUsingIndex(preAgg, mergeMsg)
 //    val rNum = r.count()
 //    println("Number   "+ rNum + "  It took %d ms count aggregate".format(System.currentTimeMillis - mid))
     r
-
   }
 }
 

@@ -9,7 +9,7 @@ import scala.reflect.ClassTag
 /**
  * Created by sunny on 5/5/16.
  */
-class MyVertexMessageImpl[VD](@transient val  partitionsRDD: RDD[(PartitionID, MyShippableVertexPartition[VD])],
+class MyVertexMessageImpl[VD](@transient val  partitionsRDD: RDD[ MyShippableVertexPartition[VD]],
 val targetStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY)
 
 extends MyVertexMessage[VD](partitionsRDD.context, List(new OneToOneDependency(partitionsRDD))) {

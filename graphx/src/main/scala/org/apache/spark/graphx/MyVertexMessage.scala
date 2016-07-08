@@ -14,15 +14,15 @@ import scala.reflect.ClassTag
 abstract class MyVertexMessage[VD] (sc: SparkContext,
                                           deps: Seq[Dependency[_]]) extends RDD[(VertexId, VD)](sc, deps) {
 
-  private[graphx] def partitionsRDD: RDD[(PartitionID, MyShippableVertexPartition[VD])]
+  private[graphx] def partitionsRDD: RDD[ MyShippableVertexPartition[VD]]
 
   override protected def getPartitions: Array[Partition] = partitionsRDD.partitions
 
 
   override def compute(part: Partition, context: TaskContext): Iterator[(VertexId, VD)] = {
-    val p = firstParent[(PartitionID, MyShippableVertexPartition[VD])].iterator(part, context)
+    val p = firstParent[ MyShippableVertexPartition[VD]].iterator(part, context)
     if (p.hasNext) {
-      p.next()._2.iterator.map(_.copy())
+      p.next().iterator.map(_.copy())
     } else {
       Iterator.empty
     }

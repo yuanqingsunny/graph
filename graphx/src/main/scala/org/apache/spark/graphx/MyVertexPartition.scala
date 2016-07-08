@@ -13,7 +13,6 @@ class MyVertexPartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Doub
 (
 
   dstIds: Array[VertexId],
-  //  srcIds: VertexIdToIndexMap,
   attrs: Array[VD],
   vertexIds: GraphXPrimitiveKeyOpenHashMap[VertexId, (Int, Int)],
   edgeAttrs: Array[ED],
@@ -67,25 +66,6 @@ class MyVertexPartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Doub
   }
 
 
-//  def map[ED2: ClassTag](iter: Iterator[ED2]): MyVertexPartition[VD,ED2] = {
-//    // Faster than iter.toArray, because the expected size is known.
-//    val newData = new Array[ED2](edgeAttrs.length)
-//    var i = 0
-//    while (iter.hasNext) {
-//      newData(i) = iter.next()
-//
-//      i += 1
-//    }
-//    assert(newData.length == i)
-//
-//    this.withData(newData)
-//  }
-//
-//  def withData[ED2: ClassTag](data: Array[ED2]): MyVertexPartition[VD,ED2] = {
-//    new MyVertexPartition(
-//      dstIds, attrs, vertexIds, data, global2local, local2global, activeSet)
-//  }
-
   def map[VD2: ClassTag](f: (VertexId, VD) => VD2): MyVertexPartition[VD2, ED] = {
     // Construct a view of the map transformation
     val newValues = new Array[VD2](size)
@@ -122,60 +102,6 @@ class MyVertexPartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Doub
 
 
 
-//
-//  def tripletIterator(
-//                       includeSrc: Boolean = true, includeDst: Boolean = true)
-//  : Iterator[MyEdgeTriplet[VD, ED]] = new Iterator[MyEdgeTriplet[VD, ED]] {
-//    private[this]  var pos = -1
-//    private[this] var index = 0
-//    private[this] var srcId = -1l
-//    private[this] var dstIndex = -1
-//    private[this] var dstPos = -1
-//    private[this] val iter = vertexIds.iterator
-////    private[this] var key_pos = vertexIds.keySet.nextPos(0)
-//
-//    override def hasNext: Boolean = index < edgeAttrs.length
-//
-//    override def next(): MyEdgeTriplet[VD, ED] = {
-//
-//      val triplet = new MyEdgeTriplet[VD, ED]
-//      if(pos == -1) {
-//
-//        val tuple = iter.next()
-//        srcId = tuple._1
-//        dstIndex = tuple._2._1
-//        dstPos = tuple._2._2
-//        pos = 0
-////        key_pos = iter.nextPos(key_pos + 1)
-//
-//      }
-//      while(dstPos == 0 ){
-//        val tuple = iter.next()
-//        srcId = tuple._1
-//        dstIndex = tuple._2._1
-//        dstPos = tuple._2._2
-//        pos = 0
-//      }
-//
-//      if (pos < dstPos) {
-//        val dstId = dstIds(dstIndex + pos)
-//        triplet.srcAttr  = attrs(global2local(srcId))
-//        triplet.srcId = srcId
-//        triplet.dstId = dstId
-//        triplet.attr = edgeAttrs(dstIndex + pos)
-//        pos = if(pos + 1 == dstPos) -1 else (pos + 1)
-//
-//      }
-//      index += 1
-//      if(triplet.srcId == 0){
-//        println("come triplet.srcId == 0")
-//        println(srcId,dstIndex,dstPos,pos)
-//        println()
-//      }
-////      println(triplet.srcId,triplet.attr)
-//      triplet
-//    }
-//  }
 
   def leftJoin[VD2: ClassTag, VD3: ClassTag]
   (other: Iterator[(VertexId, VD2)])
@@ -244,14 +170,13 @@ class MyVertexPartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Doub
     val bitset = new BitSet(global2local.size)
 
     val ctx = new AggregatingVertexContext[VD, ED, A](mergeMsg, aggregates, bitset)
-    val iter = vertexIds.iterator
 
-    while (iter.hasNext) {
+    var pos = activeSet.nextSetBit(0)
+    while (pos >= 0) {
 
-      val tuple = iter.next()
-      val srcId = tuple._1
-      val (dstIndex, dstPos) = tuple._2
-      if (activeSet.get(global2local(srcId))) {
+      val srcId = local2global(pos)
+      val (dstIndex, dstPos) = vertexIds.getOrElse(srcId,(-1,-1))
+
         var i = 0
         while (i < dstPos) {
           val dstId = dstIds(dstIndex + i)
@@ -270,9 +195,11 @@ class MyVertexPartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Doub
           }
           i += 1
         }
+
+      pos = activeSet.nextSetBit(pos+1)
       }
 
-    }
+
 
     bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
   }

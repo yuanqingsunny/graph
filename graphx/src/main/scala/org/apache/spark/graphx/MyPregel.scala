@@ -28,32 +28,31 @@ object MyPregel extends Logging {
     var messages = graph.mapReduceTriplets(sendMsg, mergeMsg)
     var activeMessages = messages.count()
     // Loop
-    var prevG: MyGraph[VD, ED] = null
+//    var prevG: MyGraph[VD, ED] = null
     var i = 0
     while (activeMessages > 0 && i < maxIterations) {
       val startTime = System.currentTimeMillis
       // Receive the messages and update the vertices.
-      prevG = g
+//      prevG = g
 
-     g = g.joinVertices(messages)(vprog).cache()
+     g = g.joinVertices(messages)(vprog)
 
-      g.vertices.count()
 //      println("iteration  " +i +"  It took %d ms count graph vertices".format(System.currentTimeMillis - startTime))
-      val oldMessages = messages
+//      val oldMessages = messages
 
-      messages = g.mapReduceTriplets(sendMsg, mergeMsg).cache()
+      messages = g.mapReduceTriplets(sendMsg, mergeMsg)
 
 
       activeMessages = messages.count()
       println("iteration  " +i +"  It took %d ms count message".format(System.currentTimeMillis - startTime))
 
-      oldMessages.unpersist(blocking = false)
-      prevG.unpersistVertices(blocking = false)
+//      oldMessages.unpersist(blocking = false)
+//      prevG.unpersistVertices(blocking = false)
 
       i += 1
 
     }
-    messages.unpersist(blocking = false)
+//    messages.unpersist(blocking = false)
     g
   } // end of apply
 }
